@@ -1,0 +1,16 @@
+const {test}=require('node:test');const assert=require('node:assert/strict');const q=require('../engine.js');
+const row=(ru,en)=>({id:'DEMO',ru,en});
+const codes=r=>q.check(r).issues.map(x=>x.code);
+test('grouping and decimal punctuation',()=>assert.deepEqual(q.inspect('120 000 USD, 42,5 м²','ru').numbers,['120000','42.5']));
+test('equivalent bilingual values',()=>assert.equal(codes(row('От 120 000 USD, 42 м²','From USD 120,000, 42 sqm')).length,0));
+test('changed price',()=>assert.ok(codes(row('120 000 USD','USD 154,000')).includes('numeric_mismatch')));
+test('changed currency',()=>assert.ok(codes(row('120 USD','120 THB')).includes('currency_mismatch')));
+test('starting-price qualifier lost',()=>assert.ok(codes(row('От 120000 USD','USD 120000')).includes('price_qualifier_mismatch')));
+test('status changed',()=>assert.ok(codes(row('Продано','Available')).includes('status_mismatch')));
+test('area changed',()=>assert.ok(codes(row('42 м²','43 sqm')).includes('area_mismatch')));
+test('empty language',()=>assert.ok(codes(row('','Available')).includes('empty_language')));
+test('exact review snapshot becomes stale on edit',()=>{const r=row('100 USD','100 USD');r.approval={snapshot:q.snapshot(r)};assert.ok(q.approvalCurrent(r));r.en='101 USD';assert.ok(!q.approvalCurrent(r));});
+test('review cannot be restored by changing id',()=>{const r=row('a','b');r.approval={snapshot:q.snapshot(r)};r.id='changed';assert.ok(!q.approvalCurrent(r));});
+test('duplicate ids rejected',()=>assert.throws(()=>q.validate({schema_version:1,records:[row('a','b'),row('a','b')]})));
+test('types rejected',()=>assert.throws(()=>q.validate({schema_version:1,records:[{id:'a',ru:1,en:'a'}]})));
+test('currency symbols normalised',()=>assert.deepEqual(q.inspect('$100','en').currencies,['USD']));
